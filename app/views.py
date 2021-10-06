@@ -207,6 +207,7 @@ def pregled_zahteva():
     rezultat = zahtevi_schema.dump(zahtevi)
     return jsonify(rezultat)
 
+# detalji aranzmana
 @main.route('/api/admin/zahtevi/<id>', methods=['PUT'])
 def obradi_zahtev(id):
     odgovor = request.json['odgovor']
