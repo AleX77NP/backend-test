@@ -1,0 +1,10 @@
+S obzirom da sam strukturu aplikacije uradio malo drugacije nego obicno
+u python shell-u je potrebno uraditi:
+1. from app import crate_app, db
+2. app = create_app()
+3. from app.models import Aranzman, Korisnik, Rezervacija, Zahtev
+4. with app.app_context():
+        db.create_all()
+
+5. Baza je sada kreirana
+6. flask run
