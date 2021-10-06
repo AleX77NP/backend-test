@@ -1,11 +1,6 @@
 from .extensions import ma
-
-class KorisnikSchema(ma.Schema):
-    class Meta:
-        fields = ('ime', 'prezime', 'email', 'korisnicko_ime', 'tip_naloga')
-
-korisnik_schema = KorisnikSchema()
-korisnici_schema = KorisnikSchema(many=True)
+from marshmallow_sqlalchemy.fields import Nested, fields
+from .models import Korisnik
 
 class AranzmanSchema(ma.Schema):
     class Meta:
@@ -27,3 +22,45 @@ class ZahtevSchema(ma.Schema):
 
 zahtev_schema = ZahtevSchema()
 zahtevi_schema = ZahtevSchema(many=True)
+
+class KorisnikSchema(ma.Schema):
+    class Meta:
+        ordered = True
+    id = fields.Int()
+    ime = fields.Str()
+    prezime = fields.Str()
+    email = fields.Str()
+    korisnicko_ime = fields.Str()
+
+korisnik_schema = KorisnikSchema()
+korisnici_schema = KorisnikSchema(many=True)
+
+# ovde imamo odvojene seme za tourist i travel guide-a, za prvog uzimamo rezervacije, a za drugog angazmane
+
+class TouristSchema(ma.Schema):
+    class Meta:
+        ordered = True
+    id = fields.Int()
+    ime = fields.Str()
+    prezime = fields.Str()
+    email = fields.Str()
+    korisnicko_ime = fields.Str()
+    rezervacije = Nested(RezervacijaSchema, many=True)
+
+tourist_schema = TouristSchema()
+tourists_schema = TouristSchema(many=True)
+
+class TravelGuideSchema(ma.Schema):
+    class Meta:
+        ordered = True
+    id = fields.Int()
+    ime = fields.Str()
+    prezime = fields.Str()
+    email = fields.Str()
+    korisnicko_ime = fields.Str()
+    aranzmani = Nested(AranzmanSchema, many=True)
+
+travel_guide_schema = TravelGuideSchema()
+travel_guides_schema = TravelGuideSchema(many=True)
+
+

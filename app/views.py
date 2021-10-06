@@ -1,10 +1,10 @@
 from flask import Blueprint, jsonify, session, redirect, request, Response, json
-from .models import Aranzman, Korisnik
+from .models import Aranzman, Korisnik,Rezervacija, Zahtev
 from .extensions import db
 from .security import hash_password, check_password
 import datetime
 from .utils import moze_li_otkazati
-from .serializers import aranzman_schema, aranzmani_schema, korisnik_schema, korisnici_schema
+from .serializers import aranzman_schema, aranzmani_schema, korisnik_schema, korisnici_schema, rezervacija_schema, rezervacije_schema, zahtev_schema, zahtevi_schema, tourist_schema, tourists_schema, travel_guide_schema,travel_guides_schema
 
 main = Blueprint('main', __name__)
 
@@ -167,7 +167,7 @@ def moji_aranzmani():
 def pregled_korisnika():
     tip = request.args.get('tip', 'TOURIST', type = str)
     korisnici = Korisnik.query.filter_by(tip_naloga=tip)
-    rezultat = korisnici_schema.dump(korisnici)
+    rezultat = tourists_schema.dump(korisnici) if tip == 'TOURIST' else travel_guides_schema.dump(korisnici)
     return jsonify(rezultat)
 
 

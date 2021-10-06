@@ -8,6 +8,8 @@ class Korisnik(db.Model):
     korisnicko_ime = db.Column(db.String(50), primary_key=True, nullable=False)
     lozinka =  db.Column(db.Text, nullable=False)
     tip_naloga = db.Column(db.String(15), nullable=False, default='TOURIST')
+    rezervacije = db.relationship('Rezervacija', lazy = 'dynamic')
+    aranzmani = db.relationship('Aranzman', lazy = 'dynamic', primaryjoin='Korisnik.korisnicko_ime==Aranzman.vodic')
 
 
 # Klasa Aranzman
