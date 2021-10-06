@@ -10,8 +10,8 @@ def create_app(config_file='settings.py'):
 
     app.config['MAIL_SERVER']='smtp.gmail.com'
     app.config['MAIL_PORT'] = 465
-    app.config['MAIL_USERNAME'] = '' # dummy mail 
-    app.config['MAIL_PASSWORD'] = ''
+    app.config['MAIL_USERNAME'] = 'shamani.projektanti@gmail.com' # dummy mail 
+    app.config['MAIL_PASSWORD'] = 'totalchaos2020'
     app.config['MAIL_USE_TLS'] = False
     app.config['MAIL_USE_SSL'] = True
 
