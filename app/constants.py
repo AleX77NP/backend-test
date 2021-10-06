@@ -1,0 +1,8 @@
+# uloge
+TOURIST = 'TOURIST'
+TRAVEL_GUIDE = 'TRAVEL_GUIDE'
+ADMIN = 'ADMIN'
+
+# odgovori na zahtev
+ODOBREN = 'ODOBREN'
+ODBIJEN = 'ODBIJEN'

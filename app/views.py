@@ -4,7 +4,8 @@ from .models import Aranzman, Korisnik,Rezervacija, Zahtev
 from .extensions import db, mail
 from .security import hash_password, check_password
 import datetime
-from .utils import moze_li_otkazati
+from .utils import moze_li_modifikovati, sortiraj_datume, da_li_je_dostupan
+from .constants import TOURIST, TRAVEL_GUIDE, ADMIN, ODOBREN, ODBIJEN
 from .serializers import aranzman_schema, aranzmani_schema, korisnik_schema, korisnici_schema, rezervacija_schema, rezervacije_schema, zahtev_schema, zahtevi_schema, tourist_schema, tourists_schema, travel_guide_schema,travel_guides_schema
 
 main = Blueprint('main', __name__)
@@ -13,7 +14,11 @@ date_format = '%Y-%m-%d'
 
 @main.route('/')
 def main_index():
-    return 'Hello World'
+    svi_aranzmani_vodica = Aranzman.query.filter_by(vodic='Alex77np').with_entities(Aranzman.pocetak, Aranzman.kraj)
+    datumi_vodica = sorted(list(svi_aranzmani_vodica))
+    print(datumi_vodica)
+    print(da_li_je_dostupan(datumi_vodica, datetime.datetime(2021,10,15,0,0), datetime.datetime(2021, 10,18,0,0)))
+    return "hi"
 
 @main.route('/api/registracija', methods=['POST']) # registracija korisnika
 def registracija():
@@ -35,7 +40,7 @@ def registracija():
     try:
         lozinka = hash_password(lozinka)
         korisnik = Korisnik(ime=ime, prezime=prezime, email=email, korisnicko_ime=korisnicko_ime,
-        lozinka=lozinka, tip_naloga='TOURIST')
+        lozinka=lozinka, tip_naloga=TOURIST)
 
         db.session.add(korisnik)
         db.session.commit()
@@ -87,7 +92,7 @@ def dodaj_aranzman():
     destinacija = request.json['destinacija']
     broj_mesta = request.json['brojMesta']
     cena = request.json['cena']
-    pocetak = destinacija = request.json['pocetak']
+    pocetak = request.json['pocetak']
     kraj = request.json['kraj']
 
     pocetak = datetime.datetime.strptime(pocetak, date_format)
@@ -107,11 +112,16 @@ def dodaj_aranzman():
 def angazuj_vodica(id):
     aranzman = Aranzman.query.get(id)
     vodic = request.json["vodic"]
-    aranzman.vodic = vodic
 
-    db.session.commit()
+    #provera da li je vodic slobodan
+    svi_aranzmani_vodica = Aranzman.query.filter_by(vodic=vodic).with_entities(Aranzman.pocetak, Aranzman.kraj)
+    datumi_vodica = sorted(list(svi_aranzmani_vodica))
+    if da_li_je_dostupan(datumi_vodica, aranzman.pocetak, aranzman.kraj) == True:
+        aranzman.vodic = vodic
+        db.session.commit()
+        return Response(json.dumps({'poruka': 'Uspesno ste dodali vodica za ovaj aranzman.'}), status=200, mimetype='application/json')
 
-    return Response(json.dumps({'poruka': 'Uspesno ste dodali vodica za ovaj aranzman.'}), status=200, mimetype='application/json')
+    return Response(json.dumps({'poruka': 'Odabrani vodic nije dostupan za ovaj aranzman.'}), status=400, mimetype='application/json')
 
 
 # azuriranje aranzmana
@@ -129,7 +139,7 @@ def azuriraj_aranzman(id):
 
     aranzman = Aranzman.query.get(id)
 
-    if moze_li_otkazati(aranzman.pocetak) == True:
+    if moze_li_modifikovati(aranzman.pocetak) == True:
         aranzman.opis = opis
         aranzman.destinacija = destinacija
         aranzman.broj_mesta = broj_mesta
@@ -147,7 +157,7 @@ def azuriraj_aranzman(id):
 @main.route('/api/admin/aranzmani/<id>', methods=['DELETE'])
 def obrisi_aranzman(id):
     aranzman = Aranzman.query.get(id)
-    if moze_li_otkazati(aranzman.pocetak) == True:
+    if moze_li_modifikovati(aranzman.pocetak) == True:
         korisnici_rezervacije = Rezervacija.query.filter_by(aranzman=id).with_entities(Rezervacija.korisnik).all()
         korisnicka_imena = [x[0] for x in list(korisnici_rezervacije)]
         korisnici = Korisnik.query.filter(Korisnik.korisnicko_ime.in_(korisnicka_imena)).with_entities(Korisnik.email).all()
@@ -155,9 +165,9 @@ def obrisi_aranzman(id):
         poruka = Message('Poruka o otkzivanju aranzmana za sve koji su rezervisali', sender='Agencija', recipients = mejlovi)
         poruka.body = f"Postovani, ovim putem Vam javljamo da aranzman koji ste rezervisali otkazan. Sve najbolje, Agencija."
         mail.send(poruka)
-        
-        #db.session.delete(aranzman)
-        #db.session.commit()
+
+        db.session.delete(aranzman)
+        db.session.commit()
         return Response(json.dumps({}), status=204, mimetype='application/json')
     else:
         return Response(json.dumps({'prouka': 'Aranzman ne moze biti obrisan'}), status=400, mimetype='application/json')
@@ -198,8 +208,8 @@ def pregled_zahteva():
 def obradi_zahtev(id):
     odgovor = request.json['odgovor']
     zahtev = Zahtev.query.get(id)
-    if odgovor == "ODOBREN":
-        zahtev.status = "ODOBREN"
+    if odgovor == ODOBREN:
+        zahtev.status = ODOBREN
         korisnik = Korisnik.query.filter_by(korisnicko_ime=zahtev.podnosilac).first()
         korisnik.tip_naloga = zahtev.zeljeni_nalog
         db.session.commit()
@@ -208,7 +218,7 @@ def obradi_zahtev(id):
         mail.send(poruka)
         return Response(json.dumps({'prouka': 'Zahtev za nadogradnju profila obradjen.'}), status=200, mimetype='application/json')
     else:
-        zahtev.status = "ODBIJEN"
+        zahtev.status = ODBIJEN
         db.session.commit()
         poruka = Message('Zahtev za nadogradnju profila', sender ='Agencija', recipients = [korisnik.email])
         poruka.body = f"Postovani/a ${korisnik.ime} {korisnik.prezime}, ovim putem Vam javljamo da je vas zahtev za nadogradnju profila odbijen. Sve najbolje, Agencija"

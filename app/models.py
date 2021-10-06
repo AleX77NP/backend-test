@@ -23,6 +23,7 @@ class Aranzman(db.Model):
     kraj = db.Column(db.DateTime, nullable=False)
     vodic = db.Column(db.String(50), db.ForeignKey('korisnik.korisnicko_ime'), nullable=True)
     admin = db.Column(db.String(50), db.ForeignKey('korisnik.korisnicko_ime'), nullable=False)
+    rezervacije = db.relationship('Rezervacija', lazy = 'dynamic', cascade='all,delete')
 
 
 # Klasa rezervacija
