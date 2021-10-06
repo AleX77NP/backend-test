@@ -1,5 +1,5 @@
 from flask import Flask, Blueprint, session
-from .extensions import db,ma, bcrypt, migrate
+from .extensions import db,ma, bcrypt, migrate, mail
 from .views import main
 
 def create_app(config_file='settings.py'):
@@ -8,9 +8,17 @@ def create_app(config_file='settings.py'):
     app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:12345@localhost/turizam'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+    app.config['MAIL_SERVER']='smtp.gmail.com'
+    app.config['MAIL_PORT'] = 465
+    app.config['MAIL_USERNAME'] = '' #  mejl ovde
+    app.config['MAIL_PASSWORD'] = ''
+    app.config['MAIL_USE_TLS'] = False
+    app.config['MAIL_USE_SSL'] = True
+
     app.config.from_pyfile(config_file)
     db.init_app(app)
     ma.init_app(app)
+    mail.init_app(app)
 
     bcrypt.init_app(app)
 

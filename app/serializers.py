@@ -18,7 +18,7 @@ rezervacije_schema = RezervacijaSchema(many=True)
 
 class ZahtevSchema(ma.Schema):
     class Meta:
-        fields = ('id', 'podnosilac', 'zeljeni_nalog')
+        fields = ('id', 'podnosilac', 'zeljeni_nalog', 'status')
 
 zahtev_schema = ZahtevSchema()
 zahtevi_schema = ZahtevSchema(many=True)

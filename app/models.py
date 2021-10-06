@@ -39,6 +39,7 @@ class Zahtev(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     podnosilac = db.Column(db.String(15), db.ForeignKey('korisnik.korisnicko_ime'), nullable=False)
     zeljeni_nalog = db.Column(db.String(15), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="NA CEKANJU")
 
 
     

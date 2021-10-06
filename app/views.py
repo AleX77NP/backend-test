@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, session, redirect, request, Response, json
+from flask_mail import Message
 from .models import Aranzman, Korisnik,Rezervacija, Zahtev
-from .extensions import db
+from .extensions import db, mail
 from .security import hash_password, check_password
 import datetime
 from .utils import moze_li_otkazati
@@ -77,7 +78,7 @@ def logout():
     return jsonify({'poruka': 'Odjava uspesna'})
 
 
-# ADMIN funkcionalnosti 
+# ADMIN FUNKCIONALNOSTI
 
 # dodavanje aranzmana
 @main.route('/api/admin/aranzmani', methods=['POST'])
@@ -147,17 +148,31 @@ def azuriraj_aranzman(id):
 def obrisi_aranzman(id):
     aranzman = Aranzman.query.get(id)
     if moze_li_otkazati(aranzman.pocetak) == True:
-        db.session.delete(aranzman)
-        db.session.commit()
-        # posalji mejl svima koji su rezervisali da je otkazan
+        korisnici_rezervacije = Rezervacija.query.filter_by(aranzman=id).with_entities(Rezervacija.korisnik).all()
+        korisnicka_imena = [x[0] for x in list(korisnici_rezervacije)]
+        korisnici = Korisnik.query.filter(Korisnik.korisnicko_ime.in_(korisnicka_imena)).with_entities(Korisnik.email).all()
+        mejlovi = [x[0] for x in list(korisnici)]
+        poruka = Message('Poruka o otkzivanju aranzmana za sve koji su rezervisali', sender='Agencija', recipients = mejlovi)
+        poruka.body = f"Postovani, ovim putem Vam javljamo da aranzman koji ste rezervisali otkazan. Sve najbolje, Agencija."
+        mail.send(poruka)
+        
+        #db.session.delete(aranzman)
+        #db.session.commit()
         return Response(json.dumps({}), status=204, mimetype='application/json')
     else:
         return Response(json.dumps({'prouka': 'Aranzman ne moze biti obrisan'}), status=400, mimetype='application/json')
 
 # uvid u sve svoje kreirane aranzmane
-@main.route('/api/admin/aranzmani', methods=['GET'])
+@main.route('/api/admin/aranzmani/moji', methods=['GET'])
 def moji_aranzmani():
     aranzmani = Aranzman.query.filter_by(admin=session.get('korisnik'))
+    rezultat = aranzmani_schema.dump(aranzmani)
+    return jsonify(rezultat)
+
+# uvid u sve aranzmane
+@main.route('/api/admin/aranzmani', methods=['GET'])
+def svi_aranzmani():
+    aranzmani = Aranzman.query.all() # dodaj paginaciju, sortiranje
     rezultat = aranzmani_schema.dump(aranzmani)
     return jsonify(rezultat)
 
@@ -172,3 +187,30 @@ def pregled_korisnika():
 
 
 # pregled svih zahteva za nadogradnju profila
+# ovo je naravno moglo da se uradi na vise nacina, mozda samo preko parametara iz URL-a i slicno
+@main.route('/api/admin/zahtevi', methods=['GET'])
+def pregled_zahteva():
+    zahtevi = Zahtev.query.all()
+    rezultat = zahtevi_schema.dump(zahtevi)
+    return jsonify(rezultat)
+
+@main.route('/api/admin/zahtevi/<id>', methods=['PUT'])
+def obradi_zahtev(id):
+    odgovor = request.json['odgovor']
+    zahtev = Zahtev.query.get(id)
+    if odgovor == "ODOBREN":
+        zahtev.status = "ODOBREN"
+        korisnik = Korisnik.query.filter_by(korisnicko_ime=zahtev.podnosilac).first()
+        korisnik.tip_naloga = zahtev.zeljeni_nalog
+        db.session.commit()
+        poruka = Message('Zahtev za nadogradnju profila', sender='Agencija', recipients = [korisnik.email])
+        poruka.body = f"Postovani/a {korisnik.ime} {korisnik.prezime}, ovim putem Vam javljamo da je vas zahtev za nadogradnju profila prihvacen. Sve najbolje, Agencija"
+        mail.send(poruka)
+        return Response(json.dumps({'prouka': 'Zahtev za nadogradnju profila obradjen.'}), status=200, mimetype='application/json')
+    else:
+        zahtev.status = "ODBIJEN"
+        db.session.commit()
+        poruka = Message('Zahtev za nadogradnju profila', sender ='Agencija', recipients = [korisnik.email])
+        poruka.body = f"Postovani/a ${korisnik.ime} {korisnik.prezime}, ovim putem Vam javljamo da je vas zahtev za nadogradnju profila odbijen. Sve najbolje, Agencija"
+        mail.send(poruka)
+        return Response(json.dumps({'prouka': 'Zahtev za nadogradnju profila obradjen.'}), status=200, mimetype='application/json')
