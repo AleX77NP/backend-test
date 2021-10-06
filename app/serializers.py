@@ -4,10 +4,17 @@ from .models import Korisnik
 
 class AranzmanSchema(ma.Schema):
     class Meta:
-        fields = ('id', 'opis', 'destinacija', 'cena', 'broj_mesta', 'pocetak', 'kraj', 'vodic')
+        fields = ('id', 'opis', 'destinacija', 'cena', 'pocetak', 'kraj', 'vodic')
 
 aranzman_schema = AranzmanSchema()
 aranzmani_schema = AranzmanSchema(many=True)
+
+# za admina
+class AranzmanDetaljiSchema(ma.Schema):
+    class Meta:
+        fields = ('id', 'opis', 'destinacija', 'cena', 'pocetak', 'kraj', 'vodic', 'broj_mesta')
+
+aranzman_detalji_schema = AranzmanDetaljiSchema()
 
 class RezervacijaSchema(ma.Schema):
     class Meta:

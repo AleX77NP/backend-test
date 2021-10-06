@@ -6,7 +6,7 @@ from .security import hash_password, check_password
 import datetime
 from .utils import moze_li_modifikovati, sortiraj_datume, da_li_je_dostupan
 from .constants import TOURIST, TRAVEL_GUIDE, ADMIN, ODOBREN, ODBIJEN
-from .serializers import aranzman_schema, aranzmani_schema, korisnik_schema, korisnici_schema, rezervacija_schema, rezervacije_schema, zahtev_schema, zahtevi_schema, tourist_schema, tourists_schema, travel_guide_schema,travel_guides_schema
+from .serializers import aranzman_schema, aranzmani_schema, korisnik_schema, korisnici_schema, rezervacija_schema, rezervacije_schema, zahtev_schema, zahtevi_schema, tourist_schema, tourists_schema, travel_guide_schema,travel_guides_schema, aranzman_detalji_schema
 
 main = Blueprint('main', __name__)
 
@@ -184,6 +184,13 @@ def moji_aranzmani():
 def svi_aranzmani():
     aranzmani = Aranzman.query.all() # dodaj paginaciju, sortiranje
     rezultat = aranzmani_schema.dump(aranzmani)
+    return jsonify(rezultat)
+
+# uvid u detalje aranzmana
+@main.route('/api/admin/aranzmani/<id>', methods=['GET'])
+def detalji_aranzmana(id):
+    aranzman = Aranzman.query.get(id) # dodaj paginaciju, sortiranje
+    rezultat = aranzman_detalji_schema.dump(aranzman)
     return jsonify(rezultat)
 
 # adminov pregled svih korisnika sa filterom
