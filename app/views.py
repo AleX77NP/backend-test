@@ -14,10 +14,6 @@ date_format = '%Y-%m-%d'
 
 @main.route('/')
 def main_index():
-    svi_aranzmani_vodica = Aranzman.query.filter_by(vodic='Alex77np').with_entities(Aranzman.pocetak, Aranzman.kraj)
-    datumi_vodica = sorted(list(svi_aranzmani_vodica))
-    print(datumi_vodica)
-    print(da_li_je_dostupan(datumi_vodica, datetime.datetime(2021,10,15,0,0), datetime.datetime(2021, 10,18,0,0)))
     return "hi"
 
 @main.route('/api/registracija', methods=['POST']) # registracija korisnika
