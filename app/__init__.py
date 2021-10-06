@@ -1,5 +1,5 @@
 from flask import Flask, Blueprint, session
-from .extensions import db, bcrypt, migrate
+from .extensions import db,ma, bcrypt, migrate
 from .views import main
 
 def create_app(config_file='settings.py'):
@@ -10,7 +10,8 @@ def create_app(config_file='settings.py'):
 
     app.config.from_pyfile(config_file)
     db.init_app(app)
-    
+    ma.init_app(app)
+
     bcrypt.init_app(app)
 
     migrate.init_app(app, db)

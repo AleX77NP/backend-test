@@ -3,6 +3,8 @@ from .models import Aranzman, Korisnik
 from .extensions import db
 from .security import hash_password, check_password
 import datetime
+from .utils import moze_li_otkazati
+from .serializers import aranzman_schema, aranzmani_schema, korisnik_schema, korisnici_schema
 
 main = Blueprint('main', __name__)
 
@@ -37,6 +39,7 @@ def registracija():
         db.session.add(korisnik)
         db.session.commit()
 
+        session['korisnik'] = korisnicko_ime
         return Response(json.dumps({'poruka': 'Uspesna registracija.'}), status=201, mimetype='application/json')
     except Exception as e:
         print(e)
@@ -55,19 +58,9 @@ def prijava():
     if check_password(postojeci_korisnik.lozinka, lozinka) == False:
         return Response(json.dumps({'poruka': 'Uneta lozinka nije tacna.'}), status=400, mimetype='application/json')
     
+    session['korisnik'] = korisnicko_ime
     return Response(json.dumps({'poruka': 'Prijava uspesna.'}), status=200, mimetype='application/json')
 
-
-@main.route('/api/aranzmani')
-def aranzmani():
-    aranzmani = Aranzman.query.all()
-    return jsonify(aranzmani)
-
-
-@main.route("/login/<korisnik>", methods=["POST", "GET"])
-def login(korisnik):
-    session['korisnik'] = korisnik
-    return jsonify({'message': 'Log in'})
 
 @main.route("/home")
 def home():
@@ -77,14 +70,16 @@ def home():
         return redirect('/')
     return jsonify({'korisnik': session.get('korisnik')})
 
-@main.route("/logout")
+# odjava
+@main.route("/odjava")
 def logout():
     session.pop('korisnik')
-    return jsonify({'message': 'Log out'})
+    return jsonify({'poruka': 'Odjava uspesna'})
 
 
 # ADMIN funkcionalnosti 
 
+# dodavanje aranzmana
 @main.route('/api/admin/aranzmani', methods=['POST'])
 def dodaj_aranzman():
     opis = request.json['opis']
@@ -98,13 +93,27 @@ def dodaj_aranzman():
     kraj = datetime.datetime.strptime(kraj, date_format)
 
     aranzman = Aranzman(opis=opis, destinacija=destinacija, broj_mesta=broj_mesta, 
-    cena=cena, pocetak=pocetak, kraj=kraj)
+    cena=cena, pocetak=pocetak, kraj=kraj, admin=session.get('korisnik'))
 
     db.session.add(aranzman)
     db.session.commit()
 
     return Response(json.dumps({'poruka': 'Aranzman dodat.'}), status=201, mimetype='application/json')
 
+
+# dodavanje vodica
+@main.route('/api/admin/aranzmani/<id>/vodic', methods=['PUT'])
+def angazuj_vodica(id):
+    aranzman = Aranzman.query.get(id)
+    vodic = request.json["vodic"]
+    aranzman.vodic = vodic
+
+    db.session.commit()
+
+    return Response(json.dumps({'poruka': 'Uspesno ste dodali vodica za ovaj aranzman.'}), status=200, mimetype='application/json')
+
+
+# azuriranje aranzmana
 @main.route('/api/admin/aranzmani/<id>', methods=['PUT'])
 def azuriraj_aranzman(id):
     opis = request.json['opis']
@@ -118,14 +127,48 @@ def azuriraj_aranzman(id):
     kraj = datetime.datetime.strptime(kraj, date_format)
 
     aranzman = Aranzman.query.get(id)
-    aranzman.opis = opis
-    aranzman.destinacija = destinacija
-    aranzman.broj_mesta = broj_mesta
-    aranzman.cena = cena
-    aranzman.pocetak = pocetak
-    aranzman.kraj = kraj
 
-    db.session.commit()
+    if moze_li_otkazati(aranzman.pocetak) == True:
+        aranzman.opis = opis
+        aranzman.destinacija = destinacija
+        aranzman.broj_mesta = broj_mesta
+        aranzman.cena = cena
+        aranzman.pocetak = pocetak
+        aranzman.kraj = kraj
 
-    return Response(json.dumps({'poruka': 'Aranzman azuriran.'}), status=200, mimetype='application/json')
-    
+        db.session.commit()
+
+        return Response(json.dumps({'poruka': 'Aranzman azuriran.'}), status=200, mimetype='application/json')
+    else:
+        return Response(json.dumps({'prouka': 'Aranzman ne moze biti azuriran'}), status=400, mimetype='application/json')
+
+# brisanje/otkazivanje aranzmana
+@main.route('/api/admin/aranzmani/<id>', methods=['DELETE'])
+def obrisi_aranzman(id):
+    aranzman = Aranzman.query.get(id)
+    if moze_li_otkazati(aranzman.pocetak) == True:
+        db.session.delete(aranzman)
+        db.session.commit()
+        # posalji mejl svima koji su rezervisali da je otkazan
+        return Response(json.dumps({}), status=204, mimetype='application/json')
+    else:
+        return Response(json.dumps({'prouka': 'Aranzman ne moze biti obrisan'}), status=400, mimetype='application/json')
+
+# uvid u sve svoje kreirane aranzmane
+@main.route('/api/admin/aranzmani', methods=['GET'])
+def moji_aranzmani():
+    aranzmani = Aranzman.query.filter_by(admin=session.get('korisnik'))
+    rezultat = aranzmani_schema.dump(aranzmani)
+    return jsonify(rezultat)
+
+# adminov pregled svih korisnika sa filterom
+
+@main.route('/api/admin/korisnici', methods=['GET'])
+def pregled_korisnika():
+    tip = request.args.get('tip', 'TOURIST', type = str)
+    korisnici = Korisnik.query.filter_by(tip_naloga=tip)
+    rezultat = korisnici_schema.dump(korisnici)
+    return jsonify(rezultat)
+
+
+# pregled svih zahteva za nadogradnju profila
