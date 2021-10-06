@@ -24,7 +24,7 @@ def da_li_je_dostupan(datumi_aranzmana, pocetak, kraj):
     # ili je kraj istog raniji datum nego pocetak prvog gde je angazovan, vrati True
         dostupan = True
     else:
-        for i in range(0, len(datumi_aranzmana)-1):
+        for i in range(0, len(datumi_aranzmana)):
             # ukoliko postoji vremenski period izmedju 2 aranzmana vodica takav da ispunjava uslov
             # da je kraj prvog pre pocetka ovog i pocetak drugog posle kraja ovog, onda je dostupan
             if datumi_aranzmana[i][1] < pocetak and datumi_aranzmana[i+1][0] > kraj:

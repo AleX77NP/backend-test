@@ -159,7 +159,7 @@ def obrisi_aranzman(id):
         korisnici = Korisnik.query.filter(Korisnik.korisnicko_ime.in_(korisnicka_imena)).with_entities(Korisnik.email).all()
         mejlovi = [x[0] for x in list(korisnici)]
         poruka = Message('Poruka o otkzivanju aranzmana za sve koji su rezervisali', sender='Agencija', recipients = mejlovi)
-        poruka.body = f"Postovani, ovim putem Vam javljamo da aranzman koji ste rezervisali otkazan. Sve najbolje, Agencija."
+        poruka.body = f"Postovani, ovim putem Vam javljamo da je aranzman koji ste rezervisali otkazan. Sve najbolje, Agencija."
         mail.send(poruka)
 
         db.session.delete(aranzman)
@@ -193,9 +193,9 @@ def detalji_aranzmana(id):
 
 @main.route('/api/admin/korisnici', methods=['GET'])
 def pregled_korisnika():
-    tip = request.args.get('tip', 'TOURIST', type = str)
+    tip = request.args.get('tip', TOURIST, type = str)
     korisnici = Korisnik.query.filter_by(tip_naloga=tip)
-    rezultat = tourists_schema.dump(korisnici) if tip == 'TOURIST' else travel_guides_schema.dump(korisnici)
+    rezultat = tourists_schema.dump(korisnici) if tip == TOURIST else travel_guides_schema.dump(korisnici)
     return jsonify(rezultat)
 
 
@@ -218,13 +218,13 @@ def obradi_zahtev(id):
         korisnik.tip_naloga = zahtev.zeljeni_nalog
         db.session.commit()
         poruka = Message('Zahtev za nadogradnju profila', sender='Agencija', recipients = [korisnik.email])
-        poruka.body = f"Postovani/a {korisnik.ime} {korisnik.prezime}, ovim putem Vam javljamo da je vas zahtev za nadogradnju profila prihvacen. Sve najbolje, Agencija"
+        poruka.body = f"Postovani/a {korisnik.ime} {korisnik.prezime}, ovim putem Vam javljamo da je Vas zahtev za nadogradnju profila prihvacen. Sve najbolje, Agencija"
         mail.send(poruka)
         return Response(json.dumps({'prouka': 'Zahtev za nadogradnju profila obradjen.'}), status=200, mimetype='application/json')
     else:
         zahtev.status = ODBIJEN
         db.session.commit()
         poruka = Message('Zahtev za nadogradnju profila', sender ='Agencija', recipients = [korisnik.email])
-        poruka.body = f"Postovani/a ${korisnik.ime} {korisnik.prezime}, ovim putem Vam javljamo da je vas zahtev za nadogradnju profila odbijen. Sve najbolje, Agencija"
+        poruka.body = f"Postovani/a ${korisnik.ime} {korisnik.prezime}, ovim putem Vam javljamo da je Vas zahtev za nadogradnju profila odbijen. Sve najbolje, Agencija"
         mail.send(poruka)
         return Response(json.dumps({'prouka': 'Zahtev za nadogradnju profila obradjen.'}), status=200, mimetype='application/json')
