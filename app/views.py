@@ -4,13 +4,15 @@ from .models import Aranzman, Korisnik, Rezervacija, Zahtev, ResetLozinke
 from .extensions import db, mail
 from .security import hash_password, check_password, vrati_tip_naloga, generisi_reset_token
 import datetime
-from .utils import moze_li_modifikovati, sortiraj_datume, da_li_je_dostupan, moze_li_rezervisati, formatiraj_datum, vrati_konacnu_cenu
-from .constants import TOURIST, TRAVEL_GUIDE, ADMIN, ODOBREN, ODBIJEN
-from .serializers import aranzman_schema, aranzmani_schema, korisnik_schema, korisnici_schema, rezervacija_schema, rezervacije_schema, zahtev_schema, zahtevi_schema, tourist_schema, tourists_schema, travel_guide_schema,travel_guides_schema, aranzman_detalji_schema, rezervacije_aranzmani_schema
+from .utils import moze_li_modifikovati, sortiraj_datume, da_li_je_dostupan, moze_li_rezervisati, formatiraj_datum, vrati_konacnu_cenu, danas_plus_pet
+from .constants import TOURIST, TRAVEL_GUIDE, ADMIN, ODOBREN, ODBIJEN, ASC, DESC
+from .serializers import aranzman_schema, aranzmani_schema, korisnik_schema, korisnici_schema, rezervacija_schema, rezervacije_schema, zahtev_schema, zahtevi_schema, tourist_schema, tourists_schema, travel_guide_schema,travel_guides_schema, aranzman_detalji_schema, rezervacije_aranzmani_schema, aranzman_za_prijavljene_schema, aranzmani_za_prijavljene_schema
 
 main = Blueprint('main', __name__)
 
 date_format = '%Y-%m-%d'
+
+ROWS_PER_PAGE = 2
 
 # rute za neprijavljene korisnike
 
@@ -121,28 +123,45 @@ def resetuj_lozinku_tokenom(token):
 
 @main.route('/api/aranzmani', methods=['GET'])
 def aranzmani():
-    nerezervisani = None
+    aranzmani = None
+    stranica = request.args.get('stranica', 1, type = int)
+    sort = request.args.get('sort')
+    if sort is None:
+        sort = ASC
+    # TRAVEL GUIDE guide moze videti sve aranzmane
     if vrati_tip_naloga(session.get('korisnik')) == TRAVEL_GUIDE:
-        nerezervisani = Aranzman.query.all()
+        # paginacija
+        aranzmani = Aranzman.query.order_by(Aranzman.pocetak.asc() if sort == ASC else Aranzman.pocetak.desc()).paginate(page=stranica, per_page=ROWS_PER_PAGE).items
     else:
-        # uzmi aranzmane koje nije rezervisao
-        nerezervisani = Rezervacija.query.filter(Rezervacija.korisnik==session.get('korisnik')).join(Aranzman, Rezervacija.aranzman!=Aranzman.id).add_columns(Aranzman.id, Aranzman.destinacija, Aranzman.opis, Aranzman.pocetak, Aranzman.cena, Aranzman.kraj, Aranzman.vodic).all()
-        # filtriraj samo one do kojh ima makar 5 dana pre pocetka
-        nerezervisani = list(filter(lambda a: moze_li_rezervisati(a.pocetak), nerezervisani))
-    
-    print(nerezervisani)
+        # za TORUIST uzmi aranzmane koje nije rezervisao
+        rezervisani = Rezervacija.query.add_columns(Rezervacija.aranzman).filter_by(korisnik=session.get('korisnik'))
+        rezervisani = list(x[1] for x in rezervisani)
+        aranzmani = Aranzman.query.order_by(Aranzman.pocetak.asc() if sort == ASC else Aranzman.pocetak.desc())
+        # uzmi samo one do kojh ima makar 5 dana pre pocetka, i koji nisu rezervisani
+        aranzmani = aranzmani.filter(Aranzman.id.notin_(rezervisani), Aranzman.pocetak > danas_plus_pet())
+
     destinacija = request.args.get('destinacija')
     pocetak = request.args.get('pocetak')
-    kraj = request.args.get('kraj')
+    kraj = request.args.get('kraj')    
 
+    # proveri da li je zadata rec u destinaciji
     if destinacija is not None:
-        nerezervisani = list(filter(lambda a: destinacija in a.destinacija, nerezervisani))
+        aranzmani = aranzmani.filter(Aranzman.destinacija.like(f'%{destinacija}%'))
+    # provera da li zadate datumske granice
     if pocetak is not None:
-        nerezervisani = list(filter(lambda a: formatiraj_datum(a.pocetak) >= pocetak, nerezervisani))
+        aranzmani = aranzmani.filter(Aranzman.pocetak >= pocetak)
     if kraj is not None:
-        nerezervisani = list(filter(lambda a: formatiraj_datum(a.kraj) <= kraj, nerezervisani))
+        aranzmani = aranzmani.filter(Aranzman.kraj <= kraj)
 
-    rezultat = aranzmani_schema.dump(nerezervisani)
+    rezultat = aranzmani_schema.dump(aranzmani.all())
+
+    return jsonify(rezultat)
+
+# detalji o aranzmanu
+@main.route('/api/aranzmani/<id>')
+def aranzman_detaljnije(id):
+    aranzman = Aranzman.query.get(id)
+    rezultat = aranzman_za_prijavljene_schema.dump(aranzman)
 
     return jsonify(rezultat)
 
@@ -361,7 +380,12 @@ def moji_aranzmani():
 # uvid u sve aranzmane
 @main.route('/api/admin/aranzmani', methods=['GET'])
 def svi_aranzmani():
-    aranzmani = Aranzman.query.all() # dodaj paginaciju, sortiranje
+    stranica = request.args.get('stranica')
+    sort = request.args.get('sort')
+    if sort is None:
+        sort = ASC
+
+    aranzmani = Aranzman.query.order_by(Aranzman.pocetak.asc() if sort == ASC else Aranzman.pocetak.desc()).paginate(page=stranica, per_page=ROWS_PER_PAGE).items
     rezultat = aranzmani_schema.dump(aranzmani)
     return jsonify(rezultat)
 
@@ -376,8 +400,12 @@ def detalji_aranzmana(id):
 
 @main.route('/api/admin/korisnici', methods=['GET'])
 def pregled_korisnika():
+    stranica = request.args.get('stranica')
+    sort = request.args.get('sort')
+    if sort is None:
+        sort = ASC
     tip = request.args.get('tip', TOURIST, type = str)
-    korisnici = Korisnik.query.filter_by(tip_naloga=tip)
+    korisnici = Korisnik.query.order_by().filter(Korisnik.tip_naloga==tip).paginate(page=stranica, per_page=ROWS_PER_PAGE).items
     rezultat = tourists_schema.dump(korisnici) if tip == TOURIST else travel_guides_schema.dump(korisnici)
     return jsonify(rezultat)
 

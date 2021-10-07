@@ -1,5 +1,6 @@
 import datetime
 import time
+from datetime import timedelta
 
 date_format = '%Y-%m-%d'
 
@@ -23,6 +24,9 @@ def formatiraj_datum(dt):
 #sortiranje svih datuma vodica
 def sortiraj_datume(datumi):
     return sorted(datumi)
+
+def danas_plus_pet():
+    return datetime.date.today() + timedelta(days=5)
 
 # da li je vodic dostupan da vodi aranzman
 def da_li_je_dostupan(datumi_aranzmana, pocetak, kraj):

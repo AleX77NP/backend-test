@@ -7,3 +7,7 @@ ADMIN = 'ADMIN'
 ODOBREN = 'ODOBREN'
 ODBIJEN = 'ODBIJEN'
 NA_CEKANJU = 'NA_CEKANJU'
+
+#sortienje
+ASC = 'asc'
+DESC = 'desc'
