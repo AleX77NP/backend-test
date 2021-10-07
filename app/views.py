@@ -15,13 +15,6 @@ date_format = '%Y-%m-%d'
 ROWS_PER_PAGE = 5
 
 # rute za neprijavljene korisnike
-@main.route('/test', methods=['POST'])
-def t():
-    try:
-        c = request.json['caa']
-        return c
-    except:
-        return "a"
 
 @main.route('/api/registracija', methods=['POST']) # registracija korisnika
 def registracija():
