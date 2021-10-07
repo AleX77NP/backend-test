@@ -72,7 +72,7 @@ def prijava():
 
 # odjava
 @main.route("/api/odjava")
-def logout():
+def odjava():
     session.pop('korisnik')
     return jsonify({'poruka': 'Odjava uspesna'})
 
