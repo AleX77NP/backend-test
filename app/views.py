@@ -78,6 +78,45 @@ def logout():
     session.pop('korisnik')
     return jsonify({'poruka': 'Odjava uspesna'})
 
+# TRAVEL_GUIDE FUNKCIONALNOSTI
+
+# aranzmani prijavljenog vodica
+@main.route('/api/vodic/aranzmani', methods=['GET'])
+def aranzmani_vodica():
+    aranzmani = Aranzman.query.filter_by(vodic=session.get('korisnik'))
+    rezultat = aranzmani_schema.dump(aranzmani)
+    return jsonify(rezultat)
+
+# izmena opisa aranzmana
+@main.route('/api/vodic/aranzmani/<id>', methods=['PUT'])
+def uredi_opis_aranzmana(id):
+    aranzman = Aranzman.query.get(id)
+    if aranzman.vodic != session.get('korisnik'):
+        return Response(json.dumps({'poruka': 'Ne mozete menjati opis aranzmana na kojem niste angazovani.'}), status=401, mimetype='application/json')
+    # ovo moze biti visak, jer vodic ne bi ni mogao da posalje zahtev za izmenu aranzmana koji nije njegov
+    if moze_li_modifikovati(aranzman.pocetak) == False:
+        return Response(json.dumps({'prouka': 'Aranzman ne moze biti azuriran sada, najkasnije 5 dana pre pocetka.'}), status=400, mimetype='application/json')
+
+    novi_opis = request.json["opis"]
+    aranzman.opis = novi_opis
+    db.session.commit()
+
+    return Response(json.dumps({'poruka': 'Uspesno ste izmenili opis aranzmana'}), status=200, mimetype='application/json')
+
+# zahtev za admin tip naloga
+@main.route('/api/vodic/zahtevi', methods=['POST'])
+def zahtev_za_admina():
+    podnosilac = session.get('korisnik')
+    zahtev = Zahtev(podnosilac=podnosilac, zeljeni_nalog=ADMIN)
+
+    db.session.add(zahtev)
+    db.session.commit()
+
+    return Response(json.dumps({'poruka': 'Zahtev za nadogradnju profila u ADMIN uspesno poslat.'}), status=201, mimetype='application/json')
+
+
+# ---------------------------------------------------------------------------------------------
+
 
 # ADMIN FUNKCIONALNOSTI
 
@@ -147,7 +186,7 @@ def azuriraj_aranzman(id):
 
         return Response(json.dumps({'poruka': 'Aranzman azuriran.'}), status=200, mimetype='application/json')
     else:
-        return Response(json.dumps({'prouka': 'Aranzman ne moze biti azuriran'}), status=400, mimetype='application/json')
+        return Response(json.dumps({'prouka': 'Aranzman ne moze biti azuriran sada, najkasnije 5 dana pre pocetka.'}), status=400, mimetype='application/json')
 
 # brisanje/otkazivanje aranzmana
 @main.route('/api/admin/aranzmani/<id>', methods=['DELETE'])
@@ -166,7 +205,7 @@ def obrisi_aranzman(id):
         db.session.commit()
         return Response(json.dumps({}), status=204, mimetype='application/json')
     else:
-        return Response(json.dumps({'prouka': 'Aranzman ne moze biti obrisan'}), status=400, mimetype='application/json')
+        return Response(json.dumps({'prouka': 'Aranzman ne moze biti obrisan sada, najkasnije 5 dana pre pocetka.'}), status=400, mimetype='application/json')
 
 # uvid u sve svoje kreirane aranzmane
 @main.route('/api/admin/aranzmani/moji', methods=['GET'])
