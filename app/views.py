@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, session, redirect, request, Response, json
 from flask_mail import Message
 from .models import Aranzman, Korisnik, Rezervacija, Zahtev, ResetLozinke
 from .extensions import db, mail
-from .security import hash_password, check_password, vrati_tip_naloga, generisi_reset_token
+from .security import hash_password, check_password, vrati_tip_naloga, generisi_reset_token, permisije
 import datetime
 from .utils import moze_li_modifikovati, sortiraj_datume, da_li_je_dostupan, moze_li_rezervisati, formatiraj_datum, vrati_konacnu_cenu, danas_plus_pet
 from .constants import TOURIST, TRAVEL_GUIDE, ADMIN, ODOBREN, ODBIJEN, ASC, DESC
@@ -12,13 +12,9 @@ main = Blueprint('main', __name__)
 
 date_format = '%Y-%m-%d'
 
-ROWS_PER_PAGE = 2
+ROWS_PER_PAGE = 5
 
 # rute za neprijavljene korisnike
-
-@main.route('/')
-def main_index():
-    return "Hello from backend test"
 
 @main.route('/api/registracija', methods=['POST']) # registracija korisnika
 def registracija():
@@ -69,7 +65,7 @@ def prijava():
 
 
 # odjava
-@main.route("/odjava")
+@main.route("/api/odjava")
 def logout():
     session.pop('korisnik')
     return jsonify({'poruka': 'Odjava uspesna'})
@@ -117,28 +113,36 @@ def resetuj_lozinku_tokenom(token):
 
     return Response(json.dumps({'poruka': 'Uspesno ste resetovali lozinku.'}), status=200, mimetype='application/json')
 
-
+# -----------------------------------------------------------------------------------------------------
 
 # TOURIST FUNKCIONALNOSTI
 
 @main.route('/api/aranzmani', methods=['GET'])
+@permisije(tip_naloga=TOURIST)
 def aranzmani():
     aranzmani = None
-    stranica = request.args.get('stranica', 1, type = int)
+    stranica = request.args.get('stranica', 1, type = int) # paginacija
     sort = request.args.get('sort')
     if sort is None:
         sort = ASC
+
+    aranzmani = Aranzman.query.order_by(Aranzman.pocetak.asc() if sort == ASC else Aranzman.pocetak.desc())
+    
+    # neprijavljeni korisnici vide samo osnovne stvari
+    if session.get('korisnik') is None:
+        rezultat = aranzmani_schema.dump(aranzmani.paginate(page=stranica, per_page=ROWS_PER_PAGE).items)
+        return jsonify(rezultat)
+
     # TRAVEL GUIDE guide moze videti sve aranzmane
-    if vrati_tip_naloga(session.get('korisnik')) == TRAVEL_GUIDE:
-        # paginacija
-        aranzmani = Aranzman.query.order_by(Aranzman.pocetak.asc() if sort == ASC else Aranzman.pocetak.desc()).paginate(page=stranica, per_page=ROWS_PER_PAGE).items
-    else:
+    
+    if vrati_tip_naloga(session.get('korisnik')) == TOURIST:
         # za TORUIST uzmi aranzmane koje nije rezervisao
         rezervisani = Rezervacija.query.add_columns(Rezervacija.aranzman).filter_by(korisnik=session.get('korisnik'))
         rezervisani = list(x[1] for x in rezervisani)
         aranzmani = Aranzman.query.order_by(Aranzman.pocetak.asc() if sort == ASC else Aranzman.pocetak.desc())
+        if rezervisani:
         # uzmi samo one do kojh ima makar 5 dana pre pocetka, i koji nisu rezervisani
-        aranzmani = aranzmani.filter(Aranzman.id.notin_(rezervisani), Aranzman.pocetak > danas_plus_pet())
+            aranzmani = aranzmani.filter(Aranzman.id.notin_(rezervisani), Aranzman.pocetak > danas_plus_pet())
 
     destinacija = request.args.get('destinacija')
     pocetak = request.args.get('pocetak')
@@ -153,12 +157,13 @@ def aranzmani():
     if kraj is not None:
         aranzmani = aranzmani.filter(Aranzman.kraj <= kraj)
 
-    rezultat = aranzmani_schema.dump(aranzmani.all())
+    rezultat = aranzmani_za_prijavljene_schema.dump(aranzmani.paginate(page=stranica, per_page=ROWS_PER_PAGE).items)
 
     return jsonify(rezultat)
 
 # detalji o aranzmanu
 @main.route('/api/aranzmani/<id>')
+@permisije(tip_naloga=TOURIST)
 def aranzman_detaljnije(id):
     aranzman = Aranzman.query.get(id)
     rezultat = aranzman_za_prijavljene_schema.dump(aranzman)
@@ -167,6 +172,7 @@ def aranzman_detaljnije(id):
 
 # korisnikove rezervacije i aranzmani
 @main.route('/api/rezervacije', methods=['GET'])
+@permisije(tip_naloga=TOURIST)
 def moje_rezervacije():
     rezervacije = Rezervacija.query.filter_by(korisnik=session.get('korisnik')).join(Aranzman, Rezervacija.aranzman==Aranzman.id).add_columns(Rezervacija.id, Rezervacija.broj_mesta, Rezervacija.ukupna_cena, Aranzman.destinacija, Aranzman.opis, Aranzman.pocetak, Aranzman.kraj, Aranzman.vodic)
     # rezervacije i aranzmani join za datog korisnika 
@@ -176,6 +182,7 @@ def moje_rezervacije():
 
 # nova rezervacija
 @main.route('/api/rezervacije', methods=['POST'])
+@permisije(tip_naloga=TOURIST)
 def nova_rezervacija():
     broj_mesta = request.json['broj_mesta']
     id_aranzmana = request.json['aranzman']
@@ -199,6 +206,7 @@ def nova_rezervacija():
 
 # profil korisnika 
 @main.route('/api/profil', methods=['GET'])
+@permisije(tip_naloga=TOURIST)
 def moj_profil():
     korisnik = session.get('korisnik')
     profil = Korisnik.query.get(korisnik)
@@ -207,6 +215,7 @@ def moj_profil():
     return jsonify(rezultat)
 
 @main.route('/api/profil', methods=['PUT'])
+@permisije(tip_naloga=TOURIST)
 def izmena_profila():
     korisnik = session.get('korisnik')
     profil = Korisnik.query.get(korisnik)
@@ -229,6 +238,7 @@ def izmena_profila():
 
 # zahtev za novi tip naloga
 @main.route('/api/zahtevi', methods=['POST'])
+@permisije(tip_naloga=TOURIST)
 def zahtev_za_admina():
     podnosilac = session.get('korisnik')
     zeljeni_nalog = ADMIN if vrati_tip_naloga(podnosilac) == TRAVEL_GUIDE else TRAVEL_GUIDE
@@ -248,6 +258,7 @@ def zahtev_za_admina():
 
 # aranzmani prijavljenog vodica
 @main.route('/api/vodic/aranzmani/moji', methods=['GET'])
+@permisije(tip_naloga=TRAVEL_GUIDE)
 def aranzmani_vodica():
     aranzmani = Aranzman.query.filter_by(vodic=session.get('korisnik'))
     rezultat = aranzmani_schema.dump(aranzmani)
@@ -255,10 +266,11 @@ def aranzmani_vodica():
 
 # izmena opisa aranzmana
 @main.route('/api/vodic/aranzmani/<id>', methods=['PUT'])
+@permisije(tip_naloga=TRAVEL_GUIDE)
 def uredi_opis_aranzmana(id):
     aranzman = Aranzman.query.get(id)
     if aranzman.vodic != session.get('korisnik'):
-        return Response(json.dumps({'poruka': 'Ne mozete menjati opis aranzmana na kojem niste angazovani.'}), status=401, mimetype='application/json')
+        return Response(json.dumps({'poruka': 'Ne mozete menjati opis aranzmana na kojem niste angazovani.'}), status=403, mimetype='application/json')
     # ovo moze biti visak, jer vodic ne bi ni mogao da posalje zahtev za izmenu aranzmana koji nije njegov
     if moze_li_modifikovati(aranzman.pocetak) == False:
         return Response(json.dumps({'prouka': 'Aranzman ne moze biti azuriran sada, najkasnije 5 dana pre pocetka.'}), status=400, mimetype='application/json')
@@ -277,6 +289,7 @@ def uredi_opis_aranzmana(id):
 
 # dodavanje aranzmana
 @main.route('/api/admin/aranzmani', methods=['POST'])
+@permisije(tip_naloga=ADMIN)
 def dodaj_aranzman():
     opis = request.json['opis']
     destinacija = request.json['destinacija']
@@ -299,6 +312,7 @@ def dodaj_aranzman():
 
 # dodavanje vodica
 @main.route('/api/admin/aranzmani/<id>/vodic', methods=['PUT'])
+@permisije(tip_naloga=ADMIN)
 def angazuj_vodica(id):
     aranzman = Aranzman.query.get(id)
     vodic = request.json["vodic"]
@@ -316,6 +330,7 @@ def angazuj_vodica(id):
 
 # azuriranje aranzmana
 @main.route('/api/admin/aranzmani/<id>', methods=['PUT'])
+@permisije(tip_naloga=ADMIN)
 def azuriraj_aranzman(id):
     opis = request.json['opis']
     destinacija = request.json['destinacija']
@@ -330,7 +345,7 @@ def azuriraj_aranzman(id):
     aranzman = Aranzman.query.get(id)
 
     if aranzman.admin != session.get('korisnik'):
-        return Response(json.dumps({'poruka': 'Ne mozete menjati  aranzman koji niste napravili.'}), status=401, mimetype='application/json')
+        return Response(json.dumps({'poruka': 'Ne mozete menjati  aranzman koji niste napravili.'}), status=403, mimetype='application/json')
 
     if moze_li_modifikovati(aranzman.pocetak) == True:
         aranzman.opis = opis
@@ -348,11 +363,12 @@ def azuriraj_aranzman(id):
 
 # brisanje/otkazivanje aranzmana
 @main.route('/api/admin/aranzmani/<id>', methods=['DELETE'])
+@permisije(tip_naloga=ADMIN)
 def obrisi_aranzman(id):
     aranzman = Aranzman.query.get(id)
 
     if aranzman.admin != session.get('korisnik'):
-        return Response(json.dumps({'poruka': 'Ne mozete obrisati aranzman koji niste napravili.'}), status=401, mimetype='application/json')
+        return Response(json.dumps({'poruka': 'Ne mozete obrisati aranzman koji niste napravili.'}), status=403, mimetype='application/json')
 
     if moze_li_modifikovati(aranzman.pocetak) == True:
         korisnici_rezervacije = Rezervacija.query.filter_by(aranzman=id).with_entities(Rezervacija.korisnik).all()
@@ -372,6 +388,7 @@ def obrisi_aranzman(id):
 
 # uvid u sve svoje kreirane aranzmane
 @main.route('/api/admin/aranzmani/moji', methods=['GET'])
+@permisije(tip_naloga=ADMIN)
 def moji_aranzmani():
     aranzmani = Aranzman.query.filter_by(admin=session.get('korisnik'))
     rezultat = aranzmani_schema.dump(aranzmani)
@@ -379,6 +396,7 @@ def moji_aranzmani():
 
 # uvid u sve aranzmane
 @main.route('/api/admin/aranzmani', methods=['GET'])
+@permisije(tip_naloga=ADMIN)
 def svi_aranzmani():
     stranica = request.args.get('stranica')
     sort = request.args.get('sort')
@@ -391,41 +409,48 @@ def svi_aranzmani():
 
 # uvid u detalje aranzmana
 @main.route('/api/admin/aranzmani/<id>', methods=['GET'])
+@permisije(tip_naloga=ADMIN)
 def detalji_aranzmana(id):
     aranzman = Aranzman.query.get(id) # dodaj paginaciju, sortiranje
     rezultat = aranzman_detalji_schema.dump(aranzman)
     return jsonify(rezultat)
 
-# adminov pregled svih korisnika sa filterom
 
+# adminov pregled svih korisnika sa filterom
 @main.route('/api/admin/korisnici', methods=['GET'])
+@permisije(tip_naloga=ADMIN)
 def pregled_korisnika():
     stranica = request.args.get('stranica')
     sort = request.args.get('sort')
     if sort is None:
         sort = ASC
     tip = request.args.get('tip', TOURIST, type = str)
-    korisnici = Korisnik.query.order_by().filter(Korisnik.tip_naloga==tip).paginate(page=stranica, per_page=ROWS_PER_PAGE).items
+    # sort po prezimenu, moze po bilo cemu u sustini
+    korisnici = Korisnik.query.order_by(Korisnik.prezime.asc() if sort == ASC else Korisnik.prezime.desc()).filter(Korisnik.tip_naloga==tip).paginate(page=stranica, per_page=ROWS_PER_PAGE).items
     rezultat = tourists_schema.dump(korisnici) if tip == TOURIST else travel_guides_schema.dump(korisnici)
     return jsonify(rezultat)
 
 
 # pregled svih zahteva za nadogradnju profila
-# ovo je naravno moglo da se uradi na vise nacina, mozda samo preko parametara iz URL-a i slicno
 @main.route('/api/admin/zahtevi', methods=['GET'])
+@permisije(tip_naloga=ADMIN)
 def pregled_zahteva():
     zahtevi = Zahtev.query.all()
     rezultat = zahtevi_schema.dump(zahtevi)
     return jsonify(rezultat)
 
-# detalji aranzmana
+# odgovor na zahtev
+# ovo je naravno moglo da se uradi na vise nacina, mozda samo preko parametara iz URL-a i slicno
 @main.route('/api/admin/zahtevi/<id>', methods=['PUT'])
+@permisije(tip_naloga=ADMIN)
 def obradi_zahtev(id):
     odgovor = request.json['odgovor']
+    komentar = request.json['komentar']
+
     zahtev = Zahtev.query.get(id)
+    korisnik = Korisnik.query.filter_by(korisnicko_ime=zahtev.podnosilac).first()
     if odgovor == ODOBREN:
         zahtev.status = ODOBREN
-        korisnik = Korisnik.query.filter_by(korisnicko_ime=zahtev.podnosilac).first()
         korisnik.tip_naloga = zahtev.zeljeni_nalog
         db.session.commit()
         poruka = Message('Zahtev za nadogradnju profila', sender='Agencija', recipients = [korisnik.email])
@@ -433,9 +458,13 @@ def obradi_zahtev(id):
         mail.send(poruka)
         return Response(json.dumps({'prouka': 'Zahtev za nadogradnju profila obradjen.'}), status=200, mimetype='application/json')
     else:
+        # komentar ne sme biti prazan ako se odbija zahtev
+        if not komentar:
+            return Response(json.dumps({'prouka': 'Potrebno je da obrazlozite svoju odluku komentarom.'}), status=200, mimetype='application/json')
+    
         zahtev.status = ODBIJEN
         db.session.commit()
         poruka = Message('Zahtev za nadogradnju profila', sender ='Agencija', recipients = [korisnik.email])
-        poruka.body = f"Postovani/a ${korisnik.ime} {korisnik.prezime}, ovim putem Vam javljamo da je Vas zahtev za nadogradnju profila odbijen. Sve najbolje, Agencija"
+        poruka.body = f"Postovani/a ${korisnik.ime} {korisnik.prezime}, ovim putem Vam javljamo da je Vas zahtev za nadogradnju profila odbijen. {komentar}. Sve najbolje, Agencija"
         mail.send(poruka)
         return Response(json.dumps({'prouka': 'Zahtev za nadogradnju profila obradjen.'}), status=200, mimetype='application/json')
