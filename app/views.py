@@ -1,8 +1,8 @@
 from flask import Blueprint, jsonify, session, redirect, request, Response, json
 from flask_mail import Message
-from .models import Aranzman, Korisnik,Rezervacija, Zahtev
+from .models import Aranzman, Korisnik, Rezervacija, Zahtev, ResetLozinke
 from .extensions import db, mail
-from .security import hash_password, check_password, vrati_tip_naloga
+from .security import hash_password, check_password, vrati_tip_naloga, generisi_reset_token
 import datetime
 from .utils import moze_li_modifikovati, sortiraj_datume, da_li_je_dostupan, moze_li_rezervisati, formatiraj_datum, vrati_konacnu_cenu
 from .constants import TOURIST, TRAVEL_GUIDE, ADMIN, ODOBREN, ODBIJEN
@@ -71,6 +71,50 @@ def prijava():
 def logout():
     session.pop('korisnik')
     return jsonify({'poruka': 'Odjava uspesna'})
+
+# zahtev za reset lozinke
+@main.route('/api/reset-lozinke', methods=['POST'])
+def resetuj_lozinku():
+    korisnik = request.json['korisnik']
+    nova_lozinka = request.json['lozinka']
+    potvrda_nove_lozinke = request.json['potvrdaLozinke']
+
+    if nova_lozinka != potvrda_nove_lozinke:
+        return Response(json.dumps({'poruka': 'Lozinke se ne poklapaju.'}), status=400, mimetype='application/json')
+
+    postojeci_korisnik = Korisnik.query.filter((Korisnik.email == korisnik) | (Korisnik.korisnicko_ime == korisnik)).first()
+    if postojeci_korisnik is None:
+        return Response(json.dumps({'poruka': 'Korisnik ne postoji.'}), status=404, mimetype='application/json')
+
+    
+    nova_lozinka = hash_password(nova_lozinka)
+    token = generisi_reset_token()
+
+    poruka = Message('Zahtev za reset lozinke', sender='Agencija', recipients = [postojeci_korisnik.email])
+    poruka.html = f"Postovani/a {korisnik}, potvrdite reset lozinke klikom na link: <a href='http://localhost:5000/api/reset-lozinke/{token}'>Resetuj lozinku</a>"
+    mail.send(poruka)
+
+    reset_lozinke = ResetLozinke(podnosilac=postojeci_korisnik.korisnicko_ime, nova_lozinka=nova_lozinka, token=token)
+    db.session.add(reset_lozinke)
+    db.session.commit()
+
+    return Response(json.dumps({'poruka': 'Poslat Vam je mejl za reset lozinke.'}), status=200, mimetype='application/json')
+
+# reset preko tokena
+@main.route('/api/reset-lozinke/<token>', methods=['GET'])
+def resetuj_lozinku_tokenom(token):
+    reset = ResetLozinke.query.filter_by(token=token).first()
+    if reset is None:
+        return Response(json.dumps({'poruka': 'Greska pri resetovanju lozinke. Nevazeci token.'}), status=400, mimetype='application/json')
+    
+    korisnik = Korisnik.query.get(reset.podnosilac)
+    korisnik.lozinka = reset.nova_lozinka
+
+    db.session.delete(reset)
+    db.session.commit()
+
+    return Response(json.dumps({'poruka': 'Uspesno ste resetovali lozinku.'}), status=200, mimetype='application/json')
+
 
 
 # TOURIST FUNKCIONALNOSTI
@@ -168,12 +212,14 @@ def izmena_profila():
 @main.route('/api/zahtevi', methods=['POST'])
 def zahtev_za_admina():
     podnosilac = session.get('korisnik')
-    zahtev = Zahtev(podnosilac=podnosilac, zeljeni_nalog=ADMIN if vrati_tip_naloga(session.get('korisnik') == TRAVEL_GUIDE else TRAVEL_GUIDE))
+    zeljeni_nalog = ADMIN if vrati_tip_naloga(podnosilac) == TRAVEL_GUIDE else TRAVEL_GUIDE
+    zahtev = Zahtev(podnosilac=podnosilac, zeljeni_nalog=zeljeni_nalog)
 
     db.session.add(zahtev)
     db.session.commit()
 
-    return Response(json.dumps({'poruka': 'Zahtev za nadogradnju profila u ADMIN uspesno poslat.'}), status=201, mimetype='application/json')
+    return Response(json.dumps({'poruka': f'Zahtev za nadogradnju profila u {zeljeni_nalog} uspesno poslat.'}), status=201, mimetype='application/json')
+
 
 # ---------------------------------------------------------------------------------------------
 
@@ -264,6 +310,9 @@ def azuriraj_aranzman(id):
 
     aranzman = Aranzman.query.get(id)
 
+    if aranzman.admin != session.get('korisnik'):
+        return Response(json.dumps({'poruka': 'Ne mozete menjati  aranzman koji niste napravili.'}), status=401, mimetype='application/json')
+
     if moze_li_modifikovati(aranzman.pocetak) == True:
         aranzman.opis = opis
         aranzman.destinacija = destinacija
@@ -282,14 +331,19 @@ def azuriraj_aranzman(id):
 @main.route('/api/admin/aranzmani/<id>', methods=['DELETE'])
 def obrisi_aranzman(id):
     aranzman = Aranzman.query.get(id)
+
+    if aranzman.admin != session.get('korisnik'):
+        return Response(json.dumps({'poruka': 'Ne mozete obrisati aranzman koji niste napravili.'}), status=401, mimetype='application/json')
+
     if moze_li_modifikovati(aranzman.pocetak) == True:
         korisnici_rezervacije = Rezervacija.query.filter_by(aranzman=id).with_entities(Rezervacija.korisnik).all()
         korisnicka_imena = [x[0] for x in list(korisnici_rezervacije)]
         korisnici = Korisnik.query.filter(Korisnik.korisnicko_ime.in_(korisnicka_imena)).with_entities(Korisnik.email).all()
         mejlovi = [x[0] for x in list(korisnici)]
-        poruka = Message('Poruka o otkzivanju aranzmana za sve koji su rezervisali', sender='Agencija', recipients = mejlovi)
-        poruka.body = f"Postovani, ovim putem Vam javljamo da je aranzman koji ste rezervisali otkazan. Sve najbolje, Agencija."
-        mail.send(poruka)
+        if mejlovi:
+            poruka = Message('Poruka o otkzivanju aranzmana za sve koji su rezervisali', sender='Agencija', recipients = mejlovi)
+            poruka.body = f"Postovani, ovim putem Vam javljamo da je aranzman {aranzman.id} - {aranzman.destinacija} koji ste rezervisali otkazan. Sve najbolje, Agencija."
+            mail.send(poruka)
 
         db.session.delete(aranzman)
         db.session.commit()

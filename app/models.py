@@ -44,5 +44,12 @@ class Zahtev(db.Model):
     zeljeni_nalog = db.Column(db.String(15), nullable=False)
     status = db.Column(db.String(20), nullable=False, default=NA_CEKANJU)
 
+# reset lozinke preko koda
+class ResetLozinke(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    podnosilac = db.Column(db.String(15), db.ForeignKey('korisnik.korisnicko_ime', ondelete='CASCADE'), nullable=False)
+    token = db.Column(db.String(24), nullable=False)
+    nova_lozinka = db.Column(db.Text, nullable=False)
+
 
     
