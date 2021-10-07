@@ -3,11 +3,22 @@ import time
 
 date_format = '%Y-%m-%d'
 
+# rad sa datumima
+
 # ogranicenje za modifikaciju aranzmana
 def moze_li_modifikovati(dt):
     today = datetime.date.today()
     delta = dt.date() - today
     return True if delta.days >=5 else False
+
+# ogranicenje za rezervacije
+def moze_li_rezervisati(dt):
+    return (dt.date() - datetime.date.today()).days >= 5
+
+# formatiranje datuma
+def formatiraj_datum(dt):
+    d = dt.strftime(date_format)
+    return d
 
 #sortiranje svih datuma vodica
 def sortiraj_datume(datumi):
@@ -31,4 +42,10 @@ def da_li_je_dostupan(datumi_aranzmana, pocetak, kraj):
                 dostupan = True
                 break
     return dostupan
+
+# ----------------------------------------------------------------------------------------
+
+# popust za rezervaciju
+def vrati_konacnu_cenu(cena, broj_mesta):
+    return 3 * cena + (broj_mesta - 3) * (0.9 * cena) if broj_mesta > 3 else broj_mesta * cena
 

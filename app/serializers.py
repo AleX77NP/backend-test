@@ -12,7 +12,7 @@ aranzmani_schema = AranzmanSchema(many=True)
 # za admina
 class AranzmanDetaljiSchema(ma.Schema):
     class Meta:
-        fields = ('id', 'opis', 'destinacija', 'cena', 'pocetak', 'kraj', 'vodic', 'broj_mesta')
+        fields = ('id', 'opis', 'destinacija', 'cena', 'pocetak', 'kraj', 'vodic', 'broj_mesta', 'slobodna_mesta')
 
 aranzman_detalji_schema = AranzmanDetaljiSchema()
 
@@ -69,5 +69,21 @@ class TravelGuideSchema(ma.Schema):
 
 travel_guide_schema = TravelGuideSchema()
 travel_guides_schema = TravelGuideSchema(many=True)
+
+# rezervacije i aranzmani join
+class RezervacijaAranzmanSchema(ma.Schema):
+    class Meta:
+        ordered = True
+    
+    id = fields.Int()
+    broj_mesta = fields.Int()
+    ukupna_cena = fields.Float()
+    destinacija = fields.Str()
+    opis = fields.Str()
+    pocetak = fields.DateTime()
+    kraj = fields.DateTime()
+    vodic = fields.Str()
+
+rezervacije_aranzmani_schema = RezervacijaAranzmanSchema(many=True)
 
 

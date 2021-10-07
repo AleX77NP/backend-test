@@ -2,19 +2,21 @@ from flask import Blueprint, jsonify, session, redirect, request, Response, json
 from flask_mail import Message
 from .models import Aranzman, Korisnik,Rezervacija, Zahtev
 from .extensions import db, mail
-from .security import hash_password, check_password
+from .security import hash_password, check_password, vrati_tip_naloga
 import datetime
-from .utils import moze_li_modifikovati, sortiraj_datume, da_li_je_dostupan
+from .utils import moze_li_modifikovati, sortiraj_datume, da_li_je_dostupan, moze_li_rezervisati, formatiraj_datum, vrati_konacnu_cenu
 from .constants import TOURIST, TRAVEL_GUIDE, ADMIN, ODOBREN, ODBIJEN
-from .serializers import aranzman_schema, aranzmani_schema, korisnik_schema, korisnici_schema, rezervacija_schema, rezervacije_schema, zahtev_schema, zahtevi_schema, tourist_schema, tourists_schema, travel_guide_schema,travel_guides_schema, aranzman_detalji_schema
+from .serializers import aranzman_schema, aranzmani_schema, korisnik_schema, korisnici_schema, rezervacija_schema, rezervacije_schema, zahtev_schema, zahtevi_schema, tourist_schema, tourists_schema, travel_guide_schema,travel_guides_schema, aranzman_detalji_schema, rezervacije_aranzmani_schema
 
 main = Blueprint('main', __name__)
 
 date_format = '%Y-%m-%d'
 
+# rute za neprijavljene korisnike
+
 @main.route('/')
 def main_index():
-    return "hi"
+    return "Hello from backend test"
 
 @main.route('/api/registracija', methods=['POST']) # registracija korisnika
 def registracija():
@@ -64,24 +66,123 @@ def prijava():
     return Response(json.dumps({'poruka': 'Prijava uspesna.'}), status=200, mimetype='application/json')
 
 
-@main.route("/home")
-def home():
-  # check if the users exist or not
-    if not session.get("korisnik"):
-        # if not there in the session then redirect to the login page
-        return redirect('/')
-    return jsonify({'korisnik': session.get('korisnik')})
-
 # odjava
 @main.route("/odjava")
 def logout():
     session.pop('korisnik')
     return jsonify({'poruka': 'Odjava uspesna'})
 
+
+# TOURIST FUNKCIONALNOSTI
+
+@main.route('/api/aranzmani', methods=['GET'])
+def aranzmani():
+    nerezervisani = None
+    if vrati_tip_naloga(session.get('korisnik')) == TRAVEL_GUIDE:
+        nerezervisani = Aranzman.query.all()
+    else:
+        # uzmi aranzmane koje nije rezervisao
+        nerezervisani = Rezervacija.query.filter(Rezervacija.korisnik==session.get('korisnik')).join(Aranzman, Rezervacija.aranzman!=Aranzman.id).add_columns(Aranzman.id, Aranzman.destinacija, Aranzman.opis, Aranzman.pocetak, Aranzman.cena, Aranzman.kraj, Aranzman.vodic).all()
+        # filtriraj samo one do kojh ima makar 5 dana pre pocetka
+        nerezervisani = list(filter(lambda a: moze_li_rezervisati(a.pocetak), nerezervisani))
+    
+    print(nerezervisani)
+    destinacija = request.args.get('destinacija')
+    pocetak = request.args.get('pocetak')
+    kraj = request.args.get('kraj')
+
+    if destinacija is not None:
+        nerezervisani = list(filter(lambda a: destinacija in a.destinacija, nerezervisani))
+    if pocetak is not None:
+        nerezervisani = list(filter(lambda a: formatiraj_datum(a.pocetak) >= pocetak, nerezervisani))
+    if kraj is not None:
+        nerezervisani = list(filter(lambda a: formatiraj_datum(a.kraj) <= kraj, nerezervisani))
+
+    rezultat = aranzmani_schema.dump(nerezervisani)
+
+    return jsonify(rezultat)
+
+# korisnikove rezervacije i aranzmani
+@main.route('/api/rezervacije', methods=['GET'])
+def moje_rezervacije():
+    rezervacije = Rezervacija.query.filter_by(korisnik=session.get('korisnik')).join(Aranzman, Rezervacija.aranzman==Aranzman.id).add_columns(Rezervacija.id, Rezervacija.broj_mesta, Rezervacija.ukupna_cena, Aranzman.destinacija, Aranzman.opis, Aranzman.pocetak, Aranzman.kraj, Aranzman.vodic)
+    # rezervacije i aranzmani join za datog korisnika 
+    rezultat = rezervacije_aranzmani_schema.dump(rezervacije)
+
+    return jsonify(rezultat)
+
+# nova rezervacija
+@main.route('/api/rezervacije', methods=['POST'])
+def nova_rezervacija():
+    broj_mesta = request.json['broj_mesta']
+    id_aranzmana = request.json['aranzman']
+
+    aranzman = Aranzman.query.get(id_aranzmana)
+    if moze_li_rezervisati(aranzman.pocetak) == False:
+        return Response(json.dumps({'poruka': 'Odabrani aranzman pocinje za manje od 5 dana, nije ga moguce rezervisati.'}), status=400, mimetype='application/json')
+
+    if aranzman.slobodna_mesta < broj_mesta:
+        return Response(json.dumps({'poruka': 'Odabrani aranzman nema dovoljan broj slbodnih mesta za Vasu rezervaciju.'}), status=400, mimetype='application/json')
+    
+    ukupna_cena = vrati_konacnu_cenu(aranzman.cena, broj_mesta)
+    rezervacija = Rezervacija(korisnik=session.get('korisnik'), aranzman=id_aranzmana, broj_mesta=broj_mesta, ukupna_cena=ukupna_cena)
+
+    aranzman.slobodna_mesta -= broj_mesta
+
+    db.session.add(rezervacija)
+    db.session.commit()
+
+    return Response(json.dumps({'poruka': 'Uspesno ste izvrsili rezervaciju.'}), status=201, mimetype='application/json')
+
+# profil korisnika 
+@main.route('/api/profil', methods=['GET'])
+def moj_profil():
+    korisnik = session.get('korisnik')
+    profil = Korisnik.query.get(korisnik)
+
+    rezultat = korisnik_schema.dump(profil)
+    return jsonify(rezultat)
+
+@main.route('/api/profil', methods=['PUT'])
+def izmena_profila():
+    korisnik = session.get('korisnik')
+    profil = Korisnik.query.get(korisnik)
+
+    ime = request.json['ime']
+    prezime = request.json['prezime']
+    email = request.json['email']
+    lozinka = request.json['lozinka'] # proveriti lozinku pre azuriranja podataka
+
+    if check_password(profil.lozinka, lozinka) == False:
+        return Response(json.dumps({'poruka': 'Lozinka koju ste uneli nije ispravna.'}), status=400, mimetype='application/json')
+    
+    profil.ime = ime
+    profil.prezime = prezime
+    profil.email = email
+
+    db.session.commit()
+
+    return Response(json.dumps({'poruka': 'Uspesno ste azurirali profil'}), status=200, mimetype='application/json')
+
+# zahtev za novi tip naloga
+@main.route('/api/zahtevi', methods=['POST'])
+def zahtev_za_admina():
+    podnosilac = session.get('korisnik')
+    zahtev = Zahtev(podnosilac=podnosilac, zeljeni_nalog=ADMIN if vrati_tip_naloga(session.get('korisnik') == TRAVEL_GUIDE else TRAVEL_GUIDE))
+
+    db.session.add(zahtev)
+    db.session.commit()
+
+    return Response(json.dumps({'poruka': 'Zahtev za nadogradnju profila u ADMIN uspesno poslat.'}), status=201, mimetype='application/json')
+
+# ---------------------------------------------------------------------------------------------
+
+
 # TRAVEL_GUIDE FUNKCIONALNOSTI
 
+
 # aranzmani prijavljenog vodica
-@main.route('/api/vodic/aranzmani', methods=['GET'])
+@main.route('/api/vodic/aranzmani/moji', methods=['GET'])
 def aranzmani_vodica():
     aranzmani = Aranzman.query.filter_by(vodic=session.get('korisnik'))
     rezultat = aranzmani_schema.dump(aranzmani)
@@ -103,17 +204,6 @@ def uredi_opis_aranzmana(id):
 
     return Response(json.dumps({'poruka': 'Uspesno ste izmenili opis aranzmana'}), status=200, mimetype='application/json')
 
-# zahtev za admin tip naloga
-@main.route('/api/vodic/zahtevi', methods=['POST'])
-def zahtev_za_admina():
-    podnosilac = session.get('korisnik')
-    zahtev = Zahtev(podnosilac=podnosilac, zeljeni_nalog=ADMIN)
-
-    db.session.add(zahtev)
-    db.session.commit()
-
-    return Response(json.dumps({'poruka': 'Zahtev za nadogradnju profila u ADMIN uspesno poslat.'}), status=201, mimetype='application/json')
-
 
 # ---------------------------------------------------------------------------------------------
 
@@ -134,7 +224,7 @@ def dodaj_aranzman():
     kraj = datetime.datetime.strptime(kraj, date_format)
 
     aranzman = Aranzman(opis=opis, destinacija=destinacija, broj_mesta=broj_mesta, 
-    cena=cena, pocetak=pocetak, kraj=kraj, admin=session.get('korisnik'))
+    slobodna_mesta=broj_mesta, cena=cena, pocetak=pocetak, kraj=kraj, admin=session.get('korisnik'))
 
     db.session.add(aranzman)
     db.session.commit()
