@@ -15,16 +15,26 @@ date_format = '%Y-%m-%d'
 ROWS_PER_PAGE = 5
 
 # rute za neprijavljene korisnike
+@main.route('/test', methods=['POST'])
+def t():
+    try:
+        c = request.json['caa']
+        return c
+    except:
+        return "a"
 
 @main.route('/api/registracija', methods=['POST']) # registracija korisnika
 def registracija():
-    ime = request.json['ime']
-    prezime = request.json['prezime']
-    email = request.json['email']
-    korisnicko_ime = request.json['korisnickoIme']
-    lozinka = request.json['lozinka']
-    potvrda_lozinke = request.json['potvrdaLozinke']
-    zeljeni_nalog  = request.json['zeljeniNalog']
+    try:
+        ime = request.json['ime']
+        prezime = request.json['prezime']
+        email = request.json['email']
+        korisnicko_ime = request.json['korisnickoIme']
+        lozinka = request.json['lozinka']
+        potvrda_lozinke = request.json['potvrdaLozinke']
+        zeljeni_nalog  = request.json['zeljeniNalog']
+    except:
+        return Response(json.dumps({'poruka': 'Uneti podaci nisu validni.'}), status=400, mimetype='application/json')
 
     if lozinka != potvrda_lozinke:
         return Response(json.dumps({'poruka': 'Lozinke se ne poklapaju.'}), status=400, mimetype='application/json')
@@ -50,8 +60,11 @@ def registracija():
 
 @main.route('/api/prijava', methods=['POST']) # prijava korisnika
 def prijava():
-    korisnicko_ime = request.json['korisnickoIme']
-    lozinka = request.json['lozinka']
+    try:
+        korisnicko_ime = request.json['korisnickoIme']
+        lozinka = request.json['lozinka']
+    except:
+        return Response(json.dumps({'poruka': 'Uneti podaci nisu validni.'}), status=400, mimetype='application/json')
 
     postojeci_korisnik = Korisnik.query.filter_by(korisnicko_ime=korisnicko_ime).first()
     if postojeci_korisnik is None:
@@ -73,9 +86,12 @@ def logout():
 # zahtev za reset lozinke
 @main.route('/api/reset-lozinke', methods=['POST'])
 def resetuj_lozinku():
-    korisnik = request.json['korisnik']
-    nova_lozinka = request.json['lozinka']
-    potvrda_nove_lozinke = request.json['potvrdaLozinke']
+    try:
+        korisnik = request.json['korisnik']
+        nova_lozinka = request.json['lozinka']
+        potvrda_nove_lozinke = request.json['potvrdaLozinke']
+    except:
+        return Response(json.dumps({'poruka': 'Uneti podaci nisu validni.'}), status=400, mimetype='application/json')
 
     if nova_lozinka != potvrda_nove_lozinke:
         return Response(json.dumps({'poruka': 'Lozinke se ne poklapaju.'}), status=400, mimetype='application/json')
@@ -184,8 +200,11 @@ def moje_rezervacije():
 @main.route('/api/rezervacije', methods=['POST'])
 @permisije(tip_naloga=TOURIST)
 def nova_rezervacija():
-    broj_mesta = request.json['broj_mesta']
-    id_aranzmana = request.json['aranzman']
+    try:
+        broj_mesta = request.json['broj_mesta']
+        id_aranzmana = request.json['aranzman']
+    except:
+        return Response(json.dumps({'poruka': 'Uneti podaci nisu validni.'}), status=400, mimetype='application/json')
 
     aranzman = Aranzman.query.get(id_aranzmana)
     if moze_li_rezervisati(aranzman.pocetak) == False:
@@ -219,11 +238,13 @@ def moj_profil():
 def izmena_profila():
     korisnik = session.get('korisnik')
     profil = Korisnik.query.get(korisnik)
-
-    ime = request.json['ime']
-    prezime = request.json['prezime']
-    email = request.json['email']
-    lozinka = request.json['lozinka'] # proveriti lozinku pre azuriranja podataka
+    try:
+        ime = request.json['ime']
+        prezime = request.json['prezime']
+        email = request.json['email']
+        lozinka = request.json['lozinka'] # proveriti lozinku pre azuriranja podataka
+    except:
+        return Response(json.dumps({'poruka': 'Uneti podaci nisu validni.'}), status=400, mimetype='application/json')
 
     if check_password(profil.lozinka, lozinka) == False:
         return Response(json.dumps({'poruka': 'Lozinka koju ste uneli nije ispravna.'}), status=400, mimetype='application/json')
@@ -271,11 +292,13 @@ def uredi_opis_aranzmana(id):
     aranzman = Aranzman.query.get(id)
     if aranzman.vodic != session.get('korisnik'):
         return Response(json.dumps({'poruka': 'Ne mozete menjati opis aranzmana na kojem niste angazovani.'}), status=403, mimetype='application/json')
-    # ovo moze biti visak, jer vodic ne bi ni mogao da posalje zahtev za izmenu aranzmana koji nije njegov
+
     if moze_li_modifikovati(aranzman.pocetak) == False:
         return Response(json.dumps({'prouka': 'Aranzman ne moze biti azuriran sada, najkasnije 5 dana pre pocetka.'}), status=400, mimetype='application/json')
-
-    novi_opis = request.json["opis"]
+    try:
+        novi_opis = request.json["opis"]
+    except:
+        return Response(json.dumps({'poruka': 'Uneti podaci nisu validni.'}), status=400, mimetype='application/json')
     aranzman.opis = novi_opis
     db.session.commit()
 
@@ -291,12 +314,15 @@ def uredi_opis_aranzmana(id):
 @main.route('/api/admin/aranzmani', methods=['POST'])
 @permisije(tip_naloga=ADMIN)
 def dodaj_aranzman():
-    opis = request.json['opis']
-    destinacija = request.json['destinacija']
-    broj_mesta = request.json['brojMesta']
-    cena = request.json['cena']
-    pocetak = request.json['pocetak']
-    kraj = request.json['kraj']
+    try:
+        opis = request.json['opis']
+        destinacija = request.json['destinacija']
+        broj_mesta = request.json['brojMesta']
+        cena = request.json['cena']
+        pocetak = request.json['pocetak']
+        kraj = request.json['kraj']
+    except:
+        return Response(json.dumps({'poruka': 'Uneti podaci nisu validni.'}), status=400, mimetype='application/json')
 
     pocetak = datetime.datetime.strptime(pocetak, date_format)
     kraj = datetime.datetime.strptime(kraj, date_format)
@@ -332,12 +358,15 @@ def angazuj_vodica(id):
 @main.route('/api/admin/aranzmani/<id>', methods=['PUT'])
 @permisije(tip_naloga=ADMIN)
 def azuriraj_aranzman(id):
-    opis = request.json['opis']
-    destinacija = request.json['destinacija']
-    broj_mesta = request.json['brojMesta']
-    cena = request.json['cena']
-    pocetak = destinacija = request.json['pocetak']
-    kraj = request.json['kraj']
+    try:
+        opis = request.json['opis']
+        destinacija = request.json['destinacija']
+        broj_mesta = request.json['brojMesta']
+        cena = request.json['cena']
+        pocetak = destinacija = request.json['pocetak']
+        kraj = request.json['kraj']
+    except:
+        return Response(json.dumps({'poruka': 'Uneti podaci nisu validni.'}), status=400, mimetype='application/json')
 
     pocetak = datetime.datetime.strptime(pocetak, date_format)
     kraj = datetime.datetime.strptime(kraj, date_format)
@@ -444,8 +473,11 @@ def pregled_zahteva():
 @main.route('/api/admin/zahtevi/<id>', methods=['PUT'])
 @permisije(tip_naloga=ADMIN)
 def obradi_zahtev(id):
-    odgovor = request.json['odgovor']
-    komentar = request.json['komentar']
+    try:
+        odgovor = request.json['odgovor']
+        komentar = request.json['komentar']
+    except:
+        return Response(json.dumps({'poruka': 'Uneti podaci nisu validni.'}), status=400, mimetype='application/json')
 
     zahtev = Zahtev.query.get(id)
     korisnik = Korisnik.query.filter_by(korisnicko_ime=zahtev.podnosilac).first()
