@@ -2,6 +2,7 @@ from .extensions import ma
 from marshmallow_sqlalchemy.fields import Nested, fields
 from .models import Korisnik
 
+# ove podatke vide neprijavljeni korisnici
 class AranzmanSchema(ma.Schema):
     class Meta:
         fields = ('id', 'destinacija', 'cena', 'pocetak', 'kraj')

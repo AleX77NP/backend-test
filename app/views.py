@@ -127,7 +127,6 @@ def resetuj_lozinku_tokenom(token):
 # TOURIST FUNKCIONALNOSTI
 
 @main.route('/api/aranzmani', methods=['GET'])
-@permisije(tip_naloga=TOURIST)
 def aranzmani():
     aranzmani = None
     stranica = request.args.get('stranica', 1, type = int) # paginacija
@@ -139,8 +138,10 @@ def aranzmani():
     
     # neprijavljeni korisnici vide samo osnovne stvari
     if session.get('korisnik') is None:
-        rezultat = aranzmani_schema.dump(aranzmani.paginate(page=stranica, per_page=ROWS_PER_PAGE).items)
-        return jsonify(rezultat)
+        rez = aranzmani.paginate(page=stranica, per_page=ROWS_PER_PAGE)
+        ukupno = len(list(aranzmani))
+        rezultat = aranzmani_schema.dump(rez.items)
+        return jsonify({'aranzmani': rezultat, 'ukupno': ukupno})
 
     # TRAVEL GUIDE guide moze videti sve aranzmane
     
@@ -166,9 +167,11 @@ def aranzmani():
     if kraj is not None:
         aranzmani = aranzmani.filter(Aranzman.kraj <= kraj)
 
-    rezultat = aranzmani_za_prijavljene_schema.dump(aranzmani.paginate(page=stranica, per_page=ROWS_PER_PAGE).items)
+    rez = aranzmani.paginate(page=stranica, per_page=ROWS_PER_PAGE)
+    ukupno = len(list(aranzmani))
+    rezultat = aranzmani_za_prijavljene_schema.dump(rez.items)
 
-    return jsonify(rezultat)
+    return jsonify({'aranzmani' :rezultat, 'ukupno': ukupno})
 
 # detalji o aranzmanu
 @main.route('/api/aranzmani/<id>')
