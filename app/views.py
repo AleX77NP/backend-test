@@ -428,9 +428,11 @@ def svi_aranzmani():
     if sort is None:
         sort = ASC
 
-    aranzmani = Aranzman.query.order_by(Aranzman.pocetak.asc() if sort == ASC else Aranzman.pocetak.desc()).paginate(page=stranica, per_page=ROWS_PER_PAGE).items
-    rezultat = aranzmani_schema.dump(aranzmani)
-    return jsonify(rezultat)
+    aranzmani = Aranzman.query.order_by(Aranzman.pocetak.asc() if sort == ASC else Aranzman.pocetak.desc())
+    rez = aranzmani.paginate(page=stranica, per_page=ROWS_PER_PAGE).items
+    ukupno = len(list(aranzmani))
+    rezultat = aranzmani_schema.dump(rez)
+    return jsonify({'aranzmani': rezultat, 'ukupno': ukupno})
 
 # uvid u detalje aranzmana
 @main.route('/api/admin/aranzmani/<id>', methods=['GET'])
@@ -451,9 +453,11 @@ def pregled_korisnika():
         sort = ASC
     tip = request.args.get('tip', TOURIST, type = str)
     # sort po prezimenu, moze po bilo cemu u sustini
-    korisnici = Korisnik.query.order_by(Korisnik.prezime.asc() if sort == ASC else Korisnik.prezime.desc()).filter(Korisnik.tip_naloga==tip).paginate(page=stranica, per_page=ROWS_PER_PAGE).items
-    rezultat = tourists_schema.dump(korisnici) if tip == TOURIST else travel_guides_schema.dump(korisnici)
-    return jsonify(rezultat)
+    korisnici = Korisnik.query.order_by(Korisnik.prezime.asc() if sort == ASC else Korisnik.prezime.desc()).filter(Korisnik.tip_naloga==tip)
+    rez = korisnici.paginate(page=stranica, per_page=ROWS_PER_PAGE).items
+    ukupno = len(list(korisnici))
+    rezultat = tourists_schema.dump(rez) if tip == TOURIST else travel_guides_schema.dump(rez)
+    return jsonify({'korisnici': rezultat, 'ukupno': ukupno})
 
 
 # pregled svih zahteva za nadogradnju profila
