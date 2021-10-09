@@ -149,10 +149,11 @@ def aranzmani():
         # za TORUIST uzmi aranzmane koje nije rezervisao
         rezervisani = Rezervacija.query.add_columns(Rezervacija.aranzman).filter_by(korisnik=session.get('korisnik'))
         rezervisani = list(x[1] for x in rezervisani)
-        aranzmani = Aranzman.query.order_by(Aranzman.pocetak.asc() if sort == ASC else Aranzman.pocetak.desc())
-        if rezervisani:
+        # aranzmani = Aranzman.query.order_by(Aranzman.pocetak.asc() if sort == ASC else Aranzman.pocetak.desc())
         # uzmi samo one do kojh ima makar 5 dana pre pocetka, i koji nisu rezervisani
-            aranzmani = aranzmani.filter(Aranzman.id.notin_(rezervisani), Aranzman.pocetak > danas_plus_pet())
+        if rezervisani:
+            aranzmani = aranzmani.filter(Aranzman.id.notin_(rezervisani))
+        aranzmani.filter(Aranzman.pocetak > danas_plus_pet())
 
     destinacija = request.args.get('destinacija')
     pocetak = request.args.get('pocetak')
