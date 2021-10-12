@@ -41,10 +41,16 @@ def registracija():
         korisnik = Korisnik(ime=ime, prezime=prezime, email=email, korisnicko_ime=korisnicko_ime,
         lozinka=lozinka, tip_naloga=TOURIST)
 
+
         db.session.add(korisnik)
         db.session.commit()
 
-        session['korisnik'] = korisnicko_ime
+        zahtev = Zahtev(podnosilac=korisnik.id, zeljeni_nalog=zeljeni_nalog)
+
+        db.session.add(zahtev)
+        db.session.commit()
+
+        session['korisnik'] = korisnik.id
         return Response(json.dumps({'poruka': 'Uspesna registracija.'}), status=201, mimetype='application/json')
     except Exception as e:
         print(e)
@@ -66,7 +72,7 @@ def prijava():
     if check_password(postojeci_korisnik.lozinka, lozinka) == False:
         return Response(json.dumps({'poruka': 'Uneta lozinka nije tacna.'}), status=400, mimetype='application/json')
     
-    session['korisnik'] = korisnicko_ime
+    session['korisnik'] = postojeci_korisnik.id
     return Response(json.dumps({'poruka': 'Prijava uspesna.'}), status=200, mimetype='application/json')
 
 
@@ -239,16 +245,16 @@ def izmena_profila():
         ime = request.json['ime']
         prezime = request.json['prezime']
         email = request.json['email']
-        lozinka = request.json['lozinka'] # proveriti lozinku pre azuriranja podataka
+        lozinka = request.json['lozinka']
+        korisnicko_ime = request.json['korisnickoIme']
     except:
         return Response(json.dumps({'poruka': 'Uneti podaci nisu validni.'}), status=400, mimetype='application/json')
-
-    if check_password(profil.lozinka, lozinka) == False:
-        return Response(json.dumps({'poruka': 'Lozinka koju ste uneli nije ispravna.'}), status=400, mimetype='application/json')
     
     profil.ime = ime
     profil.prezime = prezime
     profil.email = email
+    profil.lozinka = lozinka
+    profil.korisnicko_ime = korisnicko_ime
 
     db.session.commit()
 
@@ -360,7 +366,7 @@ def azuriraj_aranzman(id):
         destinacija = request.json['destinacija']
         broj_mesta = request.json['brojMesta']
         cena = request.json['cena']
-        pocetak = destinacija = request.json['pocetak']
+        pocetak = request.json['pocetak']
         kraj = request.json['kraj']
     except:
         return Response(json.dumps({'poruka': 'Uneti podaci nisu validni.'}), status=400, mimetype='application/json')

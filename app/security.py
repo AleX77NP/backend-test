@@ -14,7 +14,7 @@ def check_password(hashed_password, password):
 
 # provera uloge
 def vrati_tip_naloga(korisnik):
-    tip = Korisnik.query.filter_by(korisnicko_ime=korisnik).with_entities(Korisnik.tip_naloga).first()
+    tip = Korisnik.query.get(korisnik).with_entities(Korisnik.tip_naloga)
     return tip[0]
 
 # generisi kod za resetovanje lozinke
