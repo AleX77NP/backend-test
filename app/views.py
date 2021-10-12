@@ -4,6 +4,8 @@ from .models import Aranzman, Korisnik, Rezervacija, Zahtev, ResetLozinke
 from .extensions import db, mail
 from .security import hash_password, check_password, vrati_tip_naloga, generisi_reset_token, permisije
 import datetime
+from marshmallow import ValidationError
+from .validation import RegistracijaKorisnikaSchema
 from .utils import moze_li_modifikovati, sortiraj_datume, da_li_je_dostupan, moze_li_rezervisati, formatiraj_datum, vrati_konacnu_cenu, danas_plus_pet
 from .constants import TOURIST, TRAVEL_GUIDE, ADMIN, ODOBREN, ODBIJEN, ASC, DESC
 from .serializers import aranzman_schema, aranzmani_schema, korisnik_schema, korisnici_schema, rezervacija_schema, rezervacije_schema, zahtev_schema, zahtevi_schema, tourist_schema, tourists_schema, travel_guide_schema,travel_guides_schema, aranzman_detalji_schema, rezervacije_aranzmani_schema, aranzman_za_prijavljene_schema, aranzmani_za_prijavljene_schema
@@ -19,15 +21,20 @@ ROWS_PER_PAGE = 5
 @main.route('/api/registracija', methods=['POST']) # registracija korisnika
 def registracija():
     try:
-        ime = request.json['ime']
-        prezime = request.json['prezime']
-        email = request.json['email']
-        korisnicko_ime = request.json['korisnickoIme']
-        lozinka = request.json['lozinka']
-        potvrda_lozinke = request.json['potvrdaLozinke']
-        zeljeni_nalog  = request.json['zeljeniNalog']
-    except:
-        return Response(json.dumps({'poruka': 'Uneti podaci nisu validni.'}), status=400, mimetype='application/json')
+        b = request.get_json()
+
+        regSchema = RegistracijaKorisnikaSchema()
+        ulaz = regSchema.load(b)
+    except ValidationError as err:
+        return jsonify(err.messages, err.valid_data)
+
+    ime = b['ime']
+    prezime = b['prezime']
+    email = b['email']
+    korisnicko_ime = b['korisnickoIme']
+    lozinka = b['lozinka']
+    potvrda_lozinke = b['potvrda_lozinke']
+    zeljeni_nalog = b['zeljeni_nalog']
 
     if lozinka != potvrda_lozinke:
         return Response(json.dumps({'poruka': 'Lozinke se ne poklapaju.'}), status=400, mimetype='application/json')
