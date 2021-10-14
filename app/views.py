@@ -26,12 +26,12 @@ def registracija():
         regSchema = RegistracijaKorisnikaSchema()
         ulaz = regSchema.load(b)
     except ValidationError as err:
-        return jsonify(err.messages, err.valid_data)
+        return jsonify(err.messages, err.valid_data, {'poruka': "Unesite sva neophodna polja"}),400
 
     ime = b['ime']
     prezime = b['prezime']
     email = b['email']
-    korisnicko_ime = b['korisnickoIme']
+    korisnicko_ime = b['korisnicko_ime']
     lozinka = b['lozinka']
     potvrda_lozinke = b['potvrda_lozinke']
     zeljeni_nalog = b['zeljeni_nalog']
